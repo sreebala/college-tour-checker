@@ -7,6 +7,9 @@
 
 name: Daily Health Report
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   schedule:
     - cron: "0 15 * * *"     # 08:00 AM Pacific Standard / 15:00 UTC
