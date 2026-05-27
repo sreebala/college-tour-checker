@@ -52,6 +52,7 @@ class ScrapeResult:
     checked_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    screenshot_july: Optional[str] = None  # viewport-only shot of the July calendar
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -449,6 +450,22 @@ async def _scrape(
             if not nav_ok:
                 logger.warning("[%s] Month navigation incomplete", university)
             await page.screenshot(path=f"debug_{screenshot_prefix}_03_july.png", full_page=True)
+
+            # Focused calendar screenshot for the daily report email (viewport only,
+            # scrolled so the calendar widget is centred in frame)
+            cal_shot = f"debug_{screenshot_prefix}_calendar_report.png"
+            try:
+                cal_el = await page.query_selector(
+                    ".ui-datepicker, #ui-datepicker-div, "
+                    "table.ui-datepicker-calendar, [class*='calendar'], .fc-view"
+                )
+                if cal_el:
+                    await cal_el.scroll_into_view_if_needed()
+                    await page.wait_for_timeout(400)
+                await page.screenshot(path=cal_shot)   # viewport only — clean crop
+                result.screenshot_july = cal_shot
+            except Exception as exc:
+                logger.warning("[%s] Could not take calendar report screenshot: %s", university, exc)
 
             cell = await _find_day_cell(page, target_day)
             if cell is None:

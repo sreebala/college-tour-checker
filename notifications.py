@@ -8,12 +8,17 @@ Credentials are read from environment variables; see .env.example.
 """
 
 import os
+import base64
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 
 from twilio.rest import Client as TwilioClient
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import (
+    Mail, Attachment, FileContent, FileName,
+    FileType, Disposition, ContentId,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +130,25 @@ def send_slot_alert(university: str, target_date: str, morning_slots: list) -> N
     )
 
 
+def _make_inline_attachment(path: Optional[str], cid: str) -> Optional[Attachment]:
+    """Base64-encode a PNG and return a SendGrid inline attachment, or None."""
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "rb") as f:
+            data = base64.b64encode(f.read()).decode()
+        att = Attachment()
+        att.file_content = FileContent(data)
+        att.file_name    = FileName(os.path.basename(path))
+        att.file_type    = FileType("image/png")
+        att.disposition  = Disposition("inline")
+        att.content_id   = ContentId(cid)
+        return att
+    except Exception as exc:
+        logger.warning("Could not attach screenshot %s: %s", path, exc)
+        return None
+
+
 def send_daily_report(uci_result, ucla_result, last_check: str) -> None:
     """Daily digest: connection health + current slot snapshot for both schools."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -190,6 +214,22 @@ def send_daily_report(uci_result, ucla_result, last_check: str) -> None:
     </tbody>
   </table>
 
+  <h3>July Calendar Snapshots</h3>
+  <table style="width:100%;border-collapse:collapse">
+    <tr>
+      <td style="padding:8px;text-align:center;width:50%">
+        <p style="margin:0 0 6px;font-weight:bold">UCI — July 8</p>
+        <img src="cid:uci_calendar" alt="UCI July calendar"
+             style="max-width:100%;border:1px solid #ddd;border-radius:4px">
+      </td>
+      <td style="padding:8px;text-align:center;width:50%">
+        <p style="margin:0 0 6px;font-weight:bold">UCLA — July 9</p>
+        <img src="cid:ucla_calendar" alt="UCLA July calendar"
+             style="max-width:100%;border:1px solid #ddd;border-radius:4px">
+      </td>
+    </tr>
+  </table>
+
   <h3>System Health</h3>
   <p>{system_badge}</p>
   <ul>
@@ -227,8 +267,26 @@ System: {system_badge}
 UCI  booking: https://apply.admissions.uci.edu/portal/uci_uga_tours_prospect?tab=prospect_guidedtours
 UCLA booking: https://connect.admission.ucla.edu/portal/tours
 """
-    send_email(
-        subject=f"[Tour Checker] Daily Report — {now[:10]}",
-        html=html,
-        text=text,
-    )
+    if not _SG_KEY:
+        logger.error("SENDGRID_API_KEY not set — skipping email")
+        return
+    try:
+        message = Mail(
+            from_email=_FROM_EMAIL,
+            to_emails=_TO_EMAIL,
+            subject=f"[Tour Checker] Daily Report — {now[:10]}",
+            html_content=html,
+            plain_text_content=text,
+        )
+        for att in [
+            _make_inline_attachment(uci_result.screenshot_july,  "uci_calendar"),
+            _make_inline_attachment(ucla_result.screenshot_july, "ucla_calendar"),
+        ]:
+            if att:
+                message.add_attachment(att)
+
+        sg = SendGridAPIClient(_SG_KEY)
+        resp = sg.send(message)
+        logger.info("Daily report sent (status %s)", resp.status_code)
+    except Exception as exc:
+        logger.error("Daily report email failed: %s", exc)
