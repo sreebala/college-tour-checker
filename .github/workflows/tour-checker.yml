@@ -19,7 +19,7 @@ on:
 jobs:
   check:
     name: Check Slots
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 12
 
     permissions:
