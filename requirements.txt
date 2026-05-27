@@ -1,0 +1,5 @@
+playwright==1.44.0
+playwright-stealth==1.0.6
+twilio==8.13.0
+sendgrid==6.11.0
+python-dotenv==1.0.0

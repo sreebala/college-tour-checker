@@ -1,0 +1,75 @@
+# Fires once per day at 8 AM Pacific (15:00 UTC / 16:00 UTC during PDT).
+# Runs a fresh scrape and force-sends the daily health report email regardless
+# of whether slots were found. This is the "proof of life" digest so you always
+# know the script hasn't crashed or been blocked.
+#
+# Same secrets as tour-checker.yml are required.
+
+name: Daily Health Report
+
+on:
+  schedule:
+    - cron: "0 15 * * *"     # 08:00 AM Pacific Standard / 15:00 UTC
+  workflow_dispatch:          # allow manual trigger for testing
+
+jobs:
+  report:
+    name: Send Daily Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright + Chromium
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Run checker and send daily report
+        env:
+          TWILIO_ACCOUNT_SID:  ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:   ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER:  ${{ secrets.TWILIO_FROM_NUMBER }}
+          ALERT_PHONE_NUMBER:  ${{ secrets.ALERT_PHONE_NUMBER }}
+          SENDGRID_API_KEY:    ${{ secrets.SENDGRID_API_KEY }}
+          FROM_EMAIL:          ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL:            ${{ secrets.TO_EMAIL }}
+        run: python main.py --daily-report
+
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-debug-${{ github.run_id }}
+          path: debug_*.png
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Persist state
+        run: |
+          git config user.name  "tour-checker-bot"
+          git config user.email "bot@github-actions"
+          git add state.json tour_checker.log 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git pull --rebase origin "${{ github.ref_name }}" 2>/dev/null || true
+            git commit -m "chore: daily report state [skip ci]"
+            git push
+          else
+            echo "No state changes to commit."
+          fi

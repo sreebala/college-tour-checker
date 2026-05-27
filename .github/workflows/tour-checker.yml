@@ -1,0 +1,83 @@
+# Runs every 30 minutes and sends instant SMS + email if a new morning slot
+# appears on either portal. Debug screenshots are uploaded as artifacts so you
+# can inspect them if the scraper starts mis-parsing the page layout.
+#
+# Required repository secrets (Settings → Secrets → Actions):
+#   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER, ALERT_PHONE_NUMBER
+#   SENDGRID_API_KEY, FROM_EMAIL, TO_EMAIL
+
+name: Tour Slot Checker
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:          # allow manual trigger from the Actions tab
+
+jobs:
+  check:
+    name: Check Slots
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    permissions:
+      contents: write          # needed to commit state.json back to the repo
+
+    steps:
+      # ── 1. Checkout (includes the persisted state.json) ────────────────────
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Python + pip cache ──────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # ── 3. Playwright browser ──────────────────────────────────────────────
+      - name: Install Playwright + Chromium
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      # ── 4. Run the checker ─────────────────────────────────────────────────
+      - name: Run tour checker
+        env:
+          TWILIO_ACCOUNT_SID:  ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:   ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER:  ${{ secrets.TWILIO_FROM_NUMBER }}
+          ALERT_PHONE_NUMBER:  ${{ secrets.ALERT_PHONE_NUMBER }}
+          SENDGRID_API_KEY:    ${{ secrets.SENDGRID_API_KEY }}
+          FROM_EMAIL:          ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL:            ${{ secrets.TO_EMAIL }}
+        run: python main.py
+
+      # ── 5. Upload debug screenshots (kept 3 days) ──────────────────────────
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots-${{ github.run_id }}
+          path: debug_*.png
+          retention-days: 3
+          if-no-files-found: ignore
+
+      # ── 6. Commit updated state.json + log ────────────────────────────────
+      # [skip ci] prevents this commit from re-triggering the workflow.
+      - name: Persist state
+        run: |
+          git config user.name  "tour-checker-bot"
+          git config user.email "bot@github-actions"
+          git add state.json tour_checker.log 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git pull --rebase origin "${{ github.ref_name }}" 2>/dev/null || true
+            git commit -m "chore: update state [skip ci]"
+            git push
+          else
+            echo "No state changes to commit."
+          fi
