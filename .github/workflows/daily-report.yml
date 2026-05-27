@@ -40,9 +40,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Install Playwright + Chromium
-        run: |
-          playwright install chromium
-          playwright install-deps chromium
+        run: playwright install --with-deps chromium
 
       - name: Run checker and send daily report
         env:

@@ -44,9 +44,7 @@ jobs:
 
       # ── 3. Playwright browser ──────────────────────────────────────────────
       - name: Install Playwright + Chromium
-        run: |
-          playwright install chromium
-          playwright install-deps chromium
+        run: playwright install --with-deps chromium
 
       # ── 4. Run the checker ─────────────────────────────────────────────────
       - name: Run tour checker
