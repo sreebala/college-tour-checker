@@ -124,7 +124,7 @@ def send_slot_alert(university: str, target_date: str, morning_slots: list) -> N
         f"(Alert at {now})"
     )
     send_email(
-        subject=f"[URGENT] {university} Morning Tour Slot Open — {target_date}",
+        subject=f"[UCIUCLA] URGENT: {university} Morning Tour Slot Open — {target_date}",
         html=html,
         text=text,
     )
@@ -274,7 +274,7 @@ UCLA booking: https://connect.admission.ucla.edu/portal/tours
         message = Mail(
             from_email=_FROM_EMAIL,
             to_emails=_TO_EMAIL,
-            subject=f"[Tour Checker] Daily Report — {now[:10]}",
+            subject=f"[UCIUCLA] Daily Report — {now[:10]}",
             html_content=html,
             plain_text_content=text,
         )
