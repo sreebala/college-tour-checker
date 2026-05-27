@@ -117,37 +117,51 @@ def _is_morning(text: str) -> bool:
 
 # Ordered from most- to least-specific so we stop at the first working selector.
 _NEXT_SELECTORS = [
+    # jQuery UI Datepicker (confirmed on UCI; likely UCLA too)
+    "a.ui-datepicker-next",
+    ".ui-datepicker-next",
+    # FullCalendar
+    ".fc-next-button",
+    "button.fc-next-button",
+    # Generic aria / data patterns
     "button[aria-label='Next month']",
     "button[aria-label='next month']",
     "button[aria-label='Next']",
-    ".fc-next-button",
-    "button.fc-next-button",
-    "[class*='cal'] button[class*='next']",
-    "[class*='calendar'] button[class*='next']",
-    "[class*='next-month']",
     "[data-action='next']",
+    "[class*='next-month']",
+    # Text-based fallbacks
     "button:has-text('›')",
     "button:has-text('>')",
     "button:has-text('→')",
+    "a:has-text('Next')",
     "button:has-text('Next')",
 ]
 
 _HEADER_SELECTORS = [
+    # jQuery UI Datepicker
+    ".ui-datepicker-title",
+    "span.ui-datepicker-month",
+    # FullCalendar
     ".fc-toolbar-title",
     ".fc-toolbar h2",
+    # Generic
     "[class*='calendar-title']",
     "[class*='month-header']",
     "[class*='calendar-header'] h2",
     "[class*='calendar-header'] span",
-    "[class*='cal-header'] h2",
-    "[class*='cal-header'] span",
     "h2[class*='month']",
     "[class*='month-year']",
 ]
 
 _CALENDAR_SELECTORS = [
+    # jQuery UI Datepicker
+    ".ui-datepicker",
+    "#ui-datepicker-div",
+    "table.ui-datepicker-calendar",
+    # FullCalendar
     ".fc-view",
     "[class*='fc-']",
+    # Generic
     "[class*='calendar']",
     "[id*='calendar']",
     "[class*='visit']",
@@ -228,15 +242,27 @@ async def _find_day_cell(page: Page, day: int):
     """Return the element representing the target day in the displayed month."""
     day_str = f"{day:02d}"
 
-    specific_selectors = [
+    # ── jQuery UI Datepicker (confirmed UCI; data-month is 0-indexed, July=6) ──
+    try:
+        cells = await page.query_selector_all(
+            "td[data-handler='selectDay'][data-month='6'][data-year='2026']"
+        )
+        for cell in cells:
+            link = await cell.query_selector("a")
+            if link and (await link.inner_text()).strip() == str(day):
+                logger.info("jQuery UI day cell found for day %d", day)
+                return cell
+    except Exception:
+        pass
+
+    # ── FullCalendar / data-date attribute ────────────────────────────────────
+    for sel in [
         f"[data-date='2026-07-{day_str}']",
         f"[data-date*='-07-{day_str}']",
         f"td.fc-daygrid-day[data-date$='-07-{day_str}']",
         f"[aria-label*='July {day},']",
-        f"[aria-label*='July {day} ']",
         f"[aria-label='July {day}']",
-    ]
-    for sel in specific_selectors:
+    ]:
         try:
             el = await page.query_selector(sel)
             if el:
@@ -244,7 +270,7 @@ async def _find_day_cell(page: Page, day: int):
         except Exception:
             continue
 
-    # Text-based fallback inside any calendar-like container
+    # ── Text-based fallback inside any calendar container ─────────────────────
     candidates = await page.query_selector_all(
         "td.fc-daygrid-day, [class*='day-cell'], [class*='calendar-day'], [class*='cal-day']"
     )
@@ -261,13 +287,20 @@ async def _find_day_cell(page: Page, day: int):
 
 async def _day_is_available(cell) -> bool:
     try:
+        # jQuery UI datepicker: data-handler="selectDay" means the day is selectable;
+        # unselectable days use td.ui-datepicker-unselectable and have no handler.
+        handler = await cell.get_attribute("data-handler")
+        if handler == "selectDay":
+            return True
+
         cls = (await cell.get_attribute("class")) or ""
         aria_disabled = await cell.get_attribute("aria-disabled")
 
         if aria_disabled == "true":
             return False
 
-        blocked = {"disabled", "unavailable", "past", "fc-day-other", "blocked", "no-slot", "inactive"}
+        blocked = {"disabled", "unavailable", "unselectable", "past",
+                   "fc-day-other", "blocked", "no-slot", "inactive"}
         if any(b in cls.lower() for b in blocked):
             return False
 
@@ -275,8 +308,7 @@ async def _day_is_available(cell) -> bool:
         if any(a in cls.lower() for a in available):
             return True
 
-        # Optimistic: not explicitly blocked — let the slot extraction decide
-        return True
+        return True  # optimistic — slot extraction returns empty if nothing is there
     except Exception:
         return True
 
@@ -373,7 +405,7 @@ async def _scrape(
             await page.wait_for_timeout(3_500)     # let React finish rendering
             result.connected = True
 
-            await page.screenshot(path=f"debug_{screenshot_prefix}_01_loaded.png")
+            await page.screenshot(path=f"debug_{screenshot_prefix}_01_loaded.png", full_page=True)
 
             # Dismiss any overlay/cookie banner that might block clicks
             for dismiss_sel in [
@@ -390,14 +422,33 @@ async def _scrape(
                 except Exception:
                     pass
 
+            # Scroll to the bottom to trigger any lazy-loaded content, then back up
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(1_500)
+            await page.evaluate("window.scrollTo(0, 0)")
+            await page.wait_for_timeout(500)
+
+            # Dump DOM structure to help debug selector misses
+            dom_summary = await page.evaluate("""
+                () => {
+                    const els = document.querySelectorAll('[class]');
+                    const classes = new Set();
+                    els.forEach(e => e.classList.forEach(c => classes.add(c)));
+                    const iframes = [...document.querySelectorAll('iframe')].map(f => f.src);
+                    return { classes: [...classes].slice(0, 120), iframes };
+                }
+            """)
+            logger.info("[%s] iframes on page: %s", university, dom_summary.get("iframes"))
+            logger.debug("[%s] CSS classes found: %s", university, dom_summary.get("classes"))
+
             await _wait_for_calendar(page)
             await page.wait_for_timeout(1_000)
-            await page.screenshot(path=f"debug_{screenshot_prefix}_02_calendar.png")
+            await page.screenshot(path=f"debug_{screenshot_prefix}_02_calendar.png", full_page=True)
 
             nav_ok = await _navigate_to_july(page)
             if not nav_ok:
                 logger.warning("[%s] Month navigation incomplete", university)
-            await page.screenshot(path=f"debug_{screenshot_prefix}_03_july.png")
+            await page.screenshot(path=f"debug_{screenshot_prefix}_03_july.png", full_page=True)
 
             cell = await _find_day_cell(page, target_day)
             if cell is None:
@@ -409,7 +460,7 @@ async def _scrape(
                 else:
                     logger.info("[%s] Day %d appears available — clicking", university, target_day)
                     await cell.click()
-                    await page.screenshot(path=f"debug_{screenshot_prefix}_04_day_clicked.png")
+                    await page.screenshot(path=f"debug_{screenshot_prefix}_04_day_clicked.png", full_page=True)
                     slots = await _extract_slots_after_click(page)
                     result.slots = slots
                     result.morning_slots = [s for s in slots if s.is_morning]
@@ -418,13 +469,13 @@ async def _scrape(
                         university, len(slots), len(result.morning_slots),
                     )
 
-            await page.screenshot(path=f"debug_{screenshot_prefix}_05_final.png")
+            await page.screenshot(path=f"debug_{screenshot_prefix}_05_final.png", full_page=True)
 
         except Exception as exc:
             result.error = str(exc)
             logger.error("[%s] Scrape failed: %s", university, exc, exc_info=True)
             try:
-                await page.screenshot(path=f"debug_{screenshot_prefix}_error.png")
+                await page.screenshot(path=f"debug_{screenshot_prefix}_error.png", full_page=True)
             except Exception:
                 pass
         finally:
