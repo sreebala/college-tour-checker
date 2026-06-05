@@ -1,19 +1,19 @@
 {
-  "last_check": "2026-06-05T14:55:04.246378+00:00",
-  "last_daily_report": "2026-06-04T17:42:46.867307+00:00",
+  "last_check": "2026-06-05T17:12:56.741636+00:00",
+  "last_daily_report": "2026-06-05T17:12:57.089284+00:00",
   "alerted_slots": {},
   "last_uci_status": {
     "connected": true,
     "morning_slots": [],
     "all_slots": [],
     "error": null,
-    "checked_at": "2026-06-05T14:55:04.246378+00:00"
+    "checked_at": "2026-06-05T17:12:56.741636+00:00"
   },
   "last_ucla_status": {
     "connected": true,
     "morning_slots": [],
     "all_slots": [],
     "error": null,
-    "checked_at": "2026-06-05T14:55:04.246378+00:00"
+    "checked_at": "2026-06-05T17:12:56.741636+00:00"
   }
 }
