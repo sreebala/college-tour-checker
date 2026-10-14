@@ -1,5 +1,5 @@
 {
-  "last_check": "2026-10-14T01:41:26.630482+00:00",
+  "last_check": "2026-10-14T07:14:23.498361+00:00",
   "last_daily_report": "2026-10-13T20:30:42.384020+00:00",
   "alerted_slots": {
     "UCLA_July_9_2026_1015_AM": "2026-06-10T23:27:03.129986+00:00",
@@ -7,17 +7,17 @@
     "UCI_July_8_2026_1000_AM": "2026-06-15T19:02:32.299847+00:00"
   },
   "last_uci_status": {
-    "connected": true,
+    "connected": false,
     "morning_slots": [],
     "all_slots": [],
-    "error": null,
-    "checked_at": "2026-10-14T01:41:26.630482+00:00"
+    "error": "Page.goto: Timeout 35000ms exceeded.\nCall log:\nnavigating to \"https://apply.admissions.uci.edu/portal/uci_uga_tours_prospect?tab=prospect_guidedtours\", waiting until \"domcontentloaded\"\n",
+    "checked_at": "2026-10-14T07:14:23.498361+00:00"
   },
   "last_ucla_status": {
     "connected": true,
     "morning_slots": [],
     "all_slots": [],
     "error": null,
-    "checked_at": "2026-10-14T01:41:26.630482+00:00"
+    "checked_at": "2026-10-14T07:14:23.498361+00:00"
   }
 }
