@@ -1,5 +1,5 @@
 {
-  "last_check": "2026-11-18T22:29:18.474013+00:00",
+  "last_check": "2026-11-19T00:00:15.595010+00:00",
   "last_daily_report": "2026-11-18T22:29:18.758439+00:00",
   "alerted_slots": {
     "UCLA_July_9_2026_1015_AM": "2026-06-10T23:27:03.129986+00:00",
@@ -11,13 +11,13 @@
     "morning_slots": [],
     "all_slots": [],
     "error": null,
-    "checked_at": "2026-11-18T22:29:18.474013+00:00"
+    "checked_at": "2026-11-19T00:00:15.595010+00:00"
   },
   "last_ucla_status": {
     "connected": true,
     "morning_slots": [],
     "all_slots": [],
     "error": null,
-    "checked_at": "2026-11-18T22:29:18.474013+00:00"
+    "checked_at": "2026-11-19T00:00:15.595010+00:00"
   }
 }
